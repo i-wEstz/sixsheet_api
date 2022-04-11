@@ -3,6 +3,7 @@
 use Illuminate\Http\Request;
 use Illuminate\Http\Response;
 use GuzzleHttp\Client;
+use GuzzleHttp\Exception\BadResponseException;
 use Illuminate\Support\Facades\Log;
 
 /*
@@ -452,10 +453,291 @@ $app->post('/uat/status',function (Request $request) use ($app){
 //----> END OF UAT
 //----> PROD
 
+$app->post('/redeem',function (Request $request) use ($app){
+    $bodyContent = $request->getContent();
+    $bodyJSON = json_decode($bodyContent);
+    $coupon = $bodyJSON->code;
+    $machine_no = $bodyJSON->machine_no;
+    $sixsheet_url = env('SIXSHEET_COUNPON_URL',true);
+    $client = new Client(['base_uri' => $sixsheet_url]);
+    try {
+        $response = $client->request('POST', 'coupon/wp-json/wc/v3/orders', [
+            'auth' => [
+                'ck_5c6e461c46964b27bb9c3f7ead14c50aac057b63',
+                'cs_f31eed49fc2fbd49c407ea9758a28cc0c0b37bd2'
+            ],
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'cache-control' => 'no-cache'
+            ],
+            'json' => [
+                'payment_method' => 'bacs',
+                'payment_method_title' => 'Direct Bank Transfer',
+                'set_paid' => true,
+                'status' => "completed",
+                'billing' => [
+                    'first_name' => 'Coupon ' . $machine_no,
+                ],
+                'line_items' => [[
+                    "product_id" => 1130,
+                    "quantity" => 1
+                ]],
+                "coupon_lines" => [[
+                    "code" => $coupon
+                ]]
+            ]
+        ]);
+
+        $code = $response->getStatusCode();
+        if($code == 201 || $code == 200){
+            $returnResults = [
+                "success" => true,
+                "message" => "Redeemed"
+            ];
+        }else{
+            // WENT WRONG
+            $returnResults = [
+                "success" => false,
+                "message" => "Can't redeem coupon"
+            ];
+        }
+        return response()->json($returnResults);
+    }
+    catch(GuzzleHttp\Exception\BadResponseException $e){
+        $response = $e->getResponse();
+        $responseBodyAsString = json_decode($response->getBody());
+        $returnResults = [
+            "success" => false,
+            "message" => $responseBodyAsString->message
+        ];
+        return response()->json($returnResults);
+    }
+});
+
+$app->post('/new/redeem',function (Request $request) use ($app){
+    $bodyContent = $request->getContent();
+    $bodyJSON = json_decode($bodyContent);
+    $coupon = $bodyJSON->code;
+    $machine_no = $bodyJSON->machine_no;
+    $sixsheet_url = env('SIXSHEET_NEW_URL',true);
+    $client = new Client(['base_uri' => $sixsheet_url]);
+    try {
+        $response = $client->request('POST', 'wp-json/wc/v3/orders', [
+            'auth' => [
+                    'ck_2f42a702664b813f6b126d62226b7ef5b70dd46b',
+                    'cs_79aa6fc265772a6eb48f6697004f8c6a60701dd4'
+            ],
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'cache-control' => 'no-cache'
+            ],
+            'json' => [
+                'payment_method' => 'bacs',
+                'payment_method_title' => 'Direct Bank Transfer',
+                'set_paid' => true,
+                'status' => "completed",
+                'billing' => [
+                    'first_name' => 'Coupon ' . $machine_no,
+                ],
+                'line_items' => [[
+                    "product_id" => 1130,
+                    "quantity" => 1
+                ]],
+                "coupon_lines" => [[
+                    "code" => $coupon
+                ]]
+            ]
+        ]);
+
+        $code = $response->getStatusCode();
+        if($code == 201 || $code == 200){
+            $returnResults = [
+                "success" => true,
+                "message" => "Redeemed"
+            ];
+        }else{
+            // WENT WRONG
+            $returnResults = [
+                "success" => false,
+                "message" => "Can't redeem coupon"
+            ];
+        }
+        return response()->json($returnResults);
+    }
+    catch(GuzzleHttp\Exception\BadResponseException $e){
+        $response = $e->getResponse();
+        $responseBodyAsString = json_decode($response->getBody());
+        $returnResults = [
+            "success" => false,
+            "message" => $responseBodyAsString->message
+        ];
+        return response()->json($returnResults);
+    }
+});
+
+$app->post('/coupon',function (Request $request) use ($app){
+    $bodyContent = $request->getContent();
+    $bodyJSON = json_decode($bodyContent);
+    $coupon = $bodyJSON->code;
+    $date_time = new DateTime('NOW');
+    $sixsheet_url = env('SIXSHEET_COUNPON_URL',true);
+    $client = new Client(['base_uri' => $sixsheet_url]);
+    $response = $client->request('GET','coupon/wp-json/wc/v3/coupons?search='.$coupon,[
+        'auth' => [
+            'ck_5c6e461c46964b27bb9c3f7ead14c50aac057b63',
+            'cs_f31eed49fc2fbd49c407ea9758a28cc0c0b37bd2'
+        ],
+        'headers' => [
+            'Content-Type' => 'application/json',
+            'cache-control' => 'no-cache'
+        ]
+    ]);
+    $code = $response->getStatusCode();
+    $body = json_decode($response->getBody());
+
+    if($code == 200 && sizeof($body) >= 1){
+        // Check If Code is Validate
+        $usage_count = $body[0]->usage_count;
+        $usage_limit = $body[0]->usage_limit;
+        $discount_type = $body[0]->discount_type;
+        $date_expires = new DateTime($body[0]->date_expires);
+        $amount = $body[0]->amount;
+        // Check Usage Limit
+        if($usage_count < $usage_limit){
+            if($date_time <= $date_expires) {
+                if ($discount_type == 'for_free') {
+                    // FREE COUPON
+                    $returnResults = [
+                        "success" => true,
+                        "amount" => 0,
+                        "is_free" => true,
+                        "message" => "this is free coupon"
+                    ];
+
+                } else {
+                    // OTHERS
+                    $returnResults = [
+                        "success" => true,
+                        "amount" => $amount,
+                        "is_free" => false,
+                        "message" => "this is discount coupon"
+                    ];
+                }
+            }else{
+                // EXPIRED
+                $returnResults = [
+                    "success" => false,
+                    "amount" => 0,
+                    "is_free" => false,
+                    "message" => "The code you entered is incorrect or is no longer valid."
+                ];
+            }
+        }else{
+            // USAGE LIMIT REACHED
+            $returnResults = [
+                "success" => false,
+                "amount" => 0,
+                "is_free" => false,
+                "message" => "The coupon code has already been redeemed."
+            ];
+        }
+
+    }else{
+        // WENT WRONG
+        $returnResults = [
+            "success" => false,
+            "amount" => 0,
+            "is_free" => false,
+            "message" => "The code you entered is incorrect or is no longer valid."
+        ];
+    }
+    return response()->json($returnResults);
+});
+
+$app->post('/new/coupon',function (Request $request) use ($app){
+    $bodyContent = $request->getContent();
+    $bodyJSON = json_decode($bodyContent);
+    $coupon = $bodyJSON->code;
+    $date_time = new DateTime('NOW');
+    $sixsheet_url = env('SIXSHEET_NEW_URL',true);
+    $client = new Client(['base_uri' => $sixsheet_url]);
+    $response = $client->request('GET','wp-json/wc/v3/coupons?search='.$coupon,[
+        'auth' => [
+            'ck_2f42a702664b813f6b126d62226b7ef5b70dd46b',
+            'cs_79aa6fc265772a6eb48f6697004f8c6a60701dd4'
+        ],
+        'headers' => [
+            'Content-Type' => 'application/json',
+            'cache-control' => 'no-cache'
+        ]
+    ]);
+    $code = $response->getStatusCode();
+    $body = json_decode($response->getBody());
+
+    if($code == 200 && sizeof($body) >= 1){
+        // Check If Code is Validate
+        $usage_count = $body[0]->usage_count;
+        $usage_limit = $body[0]->usage_limit;
+        $discount_type = $body[0]->discount_type;
+        $date_expires = new DateTime($body[0]->date_expires);
+        $amount = $body[0]->amount;
+        // Check Usage Limit
+        if($usage_count < $usage_limit){
+            if($date_time <= $date_expires) {
+                if ($discount_type == 'for_free') {
+                    // FREE COUPON
+                    $returnResults = [
+                        "success" => true,
+                        "amount" => 0,
+                        "is_free" => true,
+                        "message" => "this is free coupon"
+                    ];
+
+                } else {
+                    // OTHERS
+                    $returnResults = [
+                        "success" => true,
+                        "amount" => $amount,
+                        "is_free" => false,
+                        "message" => "this is discount coupon"
+                    ];
+                }
+            }else{
+                // EXPIRED
+                $returnResults = [
+                    "success" => false,
+                    "amount" => 0,
+                    "is_free" => false,
+                    "message" => "The code you entered is incorrect or is no longer valid."
+                ];
+            }
+        }else{
+            // USAGE LIMIT REACHED
+            $returnResults = [
+                "success" => false,
+                "amount" => 0,
+                "is_free" => false,
+                "message" => "The coupon code has already been redeemed."
+            ];
+        }
+
+    }else{
+        // WENT WRONG
+        $returnResults = [
+            "success" => false,
+            "amount" => 0,
+            "is_free" => false,
+            "message" => "The code you entered is incorrect or is no longer valid."
+        ];
+    }
+    return response()->json($returnResults);
+});
+
 $app->get('/token',function (Request $request) use ($app){
     $crt_file = app_path('sixsheet-crt/sixsheet_me.crt');
     $crt_key = app_path('sixsheet-crt/sixsheet_me.key');
     $url = env('AUTH_PRD_URL',true);
+    $date_time = new DateTime('NOW');
     $auth_code = env('AUTH_PRD_CODE',true);
     $client = new Client(['base_uri' => $url]);
     $responseAuth = $client->request('POST','/oauth/token',[
@@ -471,6 +753,7 @@ $app->get('/token',function (Request $request) use ($app){
     ]);
     $body = json_decode($responseAuth->getBody());
     $code = $responseAuth->getStatusCode();
+    Log::info('Token '.$date_time->format('c').'->'.$body->access_token.','.$body->status.','.$body->expires_in);
     if($code == 200){
         $returnResults = [
             "success" => true,
@@ -524,7 +807,7 @@ $app->post('/status',function (Request $request) use ($app){
     ]);
     $code = $response->getStatusCode();
     $body = json_decode($response->getBody());
-    Log::info('Status '.$date_time->format('c').'->'.$response->getBody());
+    Log::info('Status '.$date_time->format('c').'->'.$body->txnStatus.','.$payment_no.','.$access_token);
     if($code == 200 && $body->statusCode == "00") {
         $returnResults = [
             "success" => true,
@@ -581,12 +864,128 @@ $app->post('/qrcode',function (Request $request) use ($app){
     ]);
     $code = $response->getStatusCode();
     $bodyQR = json_decode($response->getBody());
-    Log::info('QR '.$date_time->format('c').'->'.$response->getBody());
+    Log::info('QR '.$date_time->format('c').'->'.$txnId.','.$access_token);
     if($code == 200 && $bodyQR->statusCode == "00") {
         $returnResults = [
             "success" => true,
             "qrCode" => $bodyQR->qrCode,
             "payment_no" => $txnId,
+            "access_token" => $access_token
+        ];
+    }else{
+        $returnResults = [
+            "success" => false,
+            "message"=>"Can't Get QR Data"
+        ];
+    }
+    return response()->json($returnResults);
+});
+
+$app->post('/qrcode140',function (Request $request) use ($app){
+    $bodyContent = $request->getContent();
+    $bodyJSON = json_decode($bodyContent);
+    $access_token = $bodyJSON->access_token;
+    $machine_no = $bodyJSON->machine_no;
+    $url = env('AUTH_PRD_URL',true);
+    $mid = env('MERCHANT_PRD_ID',true);
+    $partnerId = env('PARTNER_PRD_ID',true);
+    $partnerSecret = env('PARTNER_PRD_SECRET',true);
+    $crt_file = app_path('sixsheet-crt/sixsheet_me.crt');
+    $crt_key = app_path('sixsheet-crt/sixsheet_me.key');
+    $date_time = new DateTime('NOW');
+    $txnId = 'SX'.$machine_no.$date_time->format('Ymd-His');
+    $client = new Client(['base_uri' => $url]);
+    $response = $client->request('POST','/v1/qrpayment/request',[
+        'headers' => [
+            'Content-Type' => 'application/json',
+            'cache-control' => 'no-cache',
+            'Authorization' => 'Bearer '.$access_token
+        ],
+        'cert' => $crt_file,
+        'ssl_key' => $crt_key,
+        'json' => [
+            "merchantId" => $mid,
+            "partnerId" => $partnerId,
+            "partnerSecret" => $partnerSecret,
+            "partnerTxnUid" => $txnId,
+            "qrType" => "3",
+            "reference1" => "SIXSHEET_LOCATION",
+            "reference2" => "",
+            "reference3" => "",
+            "reference4" => "",
+            "requestDt" => $date_time->format('c'),
+            "txnAmount" => "140.00",
+            "txnCurrencyCode" => "THB",
+            "metadata" => "รูปถ่าย 140.00"
+        ]
+    ]);
+    $code = $response->getStatusCode();
+    $bodyQR = json_decode($response->getBody());
+    Log::info('QR '.$date_time->format('c').'->'.$txnId.','.$access_token);
+    if($code == 200 && $bodyQR->statusCode == "00") {
+        $returnResults = [
+            "success" => true,
+            "qrCode" => $bodyQR->qrCode,
+            "payment_no" => $txnId,
+            "access_token" => $access_token
+        ];
+    }else{
+        $returnResults = [
+            "success" => false,
+            "message"=>"Can't Get QR Data"
+        ];
+    }
+    return response()->json($returnResults);
+});
+
+$app->post('/custom_qrcode',function (Request $request) use ($app){
+    $bodyContent = $request->getContent();
+    $bodyJSON = json_decode($bodyContent);
+    $access_token = $bodyJSON->access_token;
+    $machine_no = $bodyJSON->machine_no;
+    $amount = $bodyJSON->amount;
+    $url = env('AUTH_PRD_URL',true);
+    $mid = env('MERCHANT_PRD_ID',true);
+    $partnerId = env('PARTNER_PRD_ID',true);
+    $partnerSecret = env('PARTNER_PRD_SECRET',true);
+    $crt_file = app_path('sixsheet-crt/sixsheet_me.crt');
+    $crt_key = app_path('sixsheet-crt/sixsheet_me.key');
+    $date_time = new DateTime('NOW');
+    $txnId = 'SX'.$machine_no.$date_time->format('Ymd-His');
+    $client = new Client(['base_uri' => $url]);
+    $response = $client->request('POST','/v1/qrpayment/request',[
+        'headers' => [
+            'Content-Type' => 'application/json',
+            'cache-control' => 'no-cache',
+            'Authorization' => 'Bearer '.$access_token
+        ],
+        'cert' => $crt_file,
+        'ssl_key' => $crt_key,
+        'json' => [
+            "merchantId" => $mid,
+            "partnerId" => $partnerId,
+            "partnerSecret" => $partnerSecret,
+            "partnerTxnUid" => $txnId,
+            "qrType" => "3",
+            "reference1" => "SIXSHEET_LOCATION",
+            "reference2" => "",
+            "reference3" => "",
+            "reference4" => "",
+            "requestDt" => $date_time->format('c'),
+            "txnAmount" => $amount,
+            "txnCurrencyCode" => "THB",
+            "metadata" => "รูปถ่าย ".$amount
+        ]
+    ]);
+    $code = $response->getStatusCode();
+    $bodyQR = json_decode($response->getBody());
+    Log::info('QR '.$date_time->format('c').'->'.$txnId.','.$access_token);
+    if($code == 200 && $bodyQR->statusCode == "00") {
+        $returnResults = [
+            "success" => true,
+            "qrCode" => $bodyQR->qrCode,
+            "payment_no" => $txnId,
+            "amount" => $amount,
             "access_token" => $access_token
         ];
     }else{
