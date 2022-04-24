@@ -32,6 +32,275 @@ $app->post('/uat/callback', function () use ($app){
 $app->post('/callback', function () use ($app){
 
 });
+/*
+|--------------------------------------------------------------------------
+| JFIN Dev
+|--------------------------------------------------------------------------
+|
+|
+*/
+$app->get('/jauth',function (Request $request) use ($app){
+    try {
+        $url = env('JFIN_LOGIN', true);
+        $client_id = env('JFIN_CLIENT', true);
+        $mid = env('JFIN_MID', true);
+        $pwd = env('JFIN_PWD', true);
+        $key = env('JFIN_API', true);
+        $http = new Client();
+        $response = $http->request('POST', $url, [
+            'headers' => [
+                'x-api-key' => $key
+            ],
+            'json' => [
+                "clientId" => $client_id,
+                "merchantId" => $mid,
+                "password" => $pwd
+            ]
+        ]);
+        $code = $response->getStatusCode();
+        if ($code == 200) {
+            $body = json_decode($response->getBody());
+            $token = $body->token->accessToken;
+            $returnResults = [
+                "success" => true,
+                "access_token" => $token,
+            ];
+        } else {
+            $returnResults = [
+                "success" => false
+            ];
+        }
+        return response()->json($returnResults);
+    }catch(Exception $e){
+        $returnResults = [
+            "success" => false,
+            "message"=> $e->getMessage()
+        ];
+        return response()->json($returnResults);
+    }
+});
+
+$app->get('/v1/jauth',function (Request $request) use ($app){
+    try {
+        $url = env('JFIN_LOGIN', true);
+        $role = env('JFIN_ROLE',true);
+        $pwd = env('JFIN_PWD', true);
+        $key = env('JFIN_API', true);
+        $email = env('JFIN_EMAIL',true);
+        $http = new Client();
+        $response = $http->request('POST', $url, [
+            'headers' => [
+                'x-api-key' => $key
+            ],
+            'json' => [
+                "email" => $email,
+                "password" => $pwd,
+                "role" => $role
+            ]
+        ]);
+        $code = $response->getStatusCode();
+        if ($code == 200) {
+            $body = json_decode($response->getBody());
+            $token = $body->token->accessToken;
+            $returnResults = [
+                "success" => true,
+                "access_token" => $token,
+            ];
+        } else {
+            $returnResults = [
+                "success" => false
+            ];
+        }
+        return response()->json($returnResults);
+    }catch(Exception $e){
+        $returnResults = [
+            "success" => false,
+            "message"=> $e->getMessage()
+        ];
+        return response()->json($returnResults);
+    }
+});
+
+$app->post('/jqr',function (Request $request) use ($app){
+    try{
+        $bodyContent = $request->getContent();
+        $bodyJSON = json_decode($bodyContent);
+        $machine_no = $bodyJSON->machine_no;
+        $access_token = $bodyJSON->access_token;
+        $amount = $bodyJSON->amount;
+        $date_time = new DateTime('NOW');
+        $url = env('JFIN_QR',true);
+        $mid = env('JFIN_MID', true);
+        $http = new Client();
+        $key = env('JFIN_API', true);
+        $branchId = env('JFIN_BID',true);
+        $txnId = 'SXST'. $date_time->format('Ymd-His');
+        $response = $http->request('POST', $url, [
+            'headers' => [
+                'x-api-key' => $key,
+                'Authorization' => 'Bearer '.$access_token
+            ],
+            'json' => [
+//                "backendCallbackURL"=> "https://sixsheet.me/api/jfin/callback",
+                "branchId"=> $branchId,
+                "merchantId"=> $mid,
+                "paidCurrency"=> "JFIN",
+                "posId"=> "SXFOTO",
+                "product"=> "Fotomat",
+                "reference1"=> $machine_no,
+                "reference2"=> "",
+                "referenceNo"=> $txnId,
+                "requestAmount"=> (int) $amount,
+                "requestCurrency"=> "THB"
+            ]
+        ]);
+        $code = $response->getStatusCode();
+        if ($code == 200) {
+            $body = json_decode($response->getBody());
+            $returnResults = [
+                "success" => $body->success,
+                "qrCode" => $body->qrCode,
+                "orderId"=> $body->orderId,
+                "transactionId" => $body->transactionId,
+                "requestAmount" => $body->requestAmount,
+                "requestCurrency"=>$body->requestCurrency,
+                "paidAmount"=>$body->paidAmount,
+                "paidCurrency"=>$body->paidCurrency,
+                "exchangeRate"=> (int) $amount / $body->paidAmount ,
+                "expiredAt"=>$body->expiredAt
+            ];
+        }else{
+            $returnResults = [
+                "success" => false
+            ];
+        }
+        return response()->json($returnResults);
+
+    }catch(Exception $e){
+        $returnResults = [
+            "success" => false,
+            "message"=> $e->getMessage()
+        ];
+        return response()->json($returnResults);
+    }
+});
+
+$app->post('/jdetail',function (Request $request) use ($app){
+    try{
+        $bodyContent = $request->getContent();
+        $bodyJSON = json_decode($bodyContent);
+        $transactionId = $bodyJSON->transactionId;
+        $access_token = $bodyJSON->access_token;
+        $url = env('JFIN_DETAIL',true);
+        $http = new Client();
+        $key = env('JFIN_API', true);
+        $response = $http->request('POST', $url, [
+            'headers' => [
+                'x-api-key' => $key,
+                'Authorization' => 'Bearer '.$access_token
+            ],
+            'json' => [
+                "transactionId"=>$transactionId
+            ]
+        ]);
+        $code = $response->getStatusCode();
+        if ($code == 200) {
+            $body = json_decode($response->getBody());
+            $desc = "";
+            if($body->data->state == 10){
+                $desc = "PENDING";
+            }else if($body->data->state == 20){
+                $desc = "FAILED";
+            }else if($body->data->state == 30){
+                $desc = "COMPLETE";
+            }
+            $returnResults = [
+                "success" => $body->success,
+                "id"=> $body->data->id,
+                "state"=> $body->data->state,
+                "status"=> $body->data->status,
+                "result"=>$desc,
+                "data"=> $body->data,
+//                "transactionReferenceCode"=> $body->data->transactionReferenceCode,
+//                "merchantId"=> $body->data->merchantId,
+//                "merchantName"=> $body->data->merchantName,
+//                "branchId"=> $body->data->branchId,
+//                "branchName"=> $body->data->branchName,
+//                "posId"=> $body->data->posId,
+//                "referenceNo"=> $body->data->referenceNo,
+//                "reference1"=> $body->data->reference1,
+//                "reference2"=> $body->data->reference2,
+//                "product"=> $body->data->product,
+//                "customerName"=> $body->data->customerName,
+//                "customerFirstName"=> $body->data->customerFirstName,
+//                "customerLastName"=>$body->data->customerLastName,
+//                "customerMobileNo"=> $body->data->customerMobileNo,
+//                "requestAmount"=> $body->data->requestAmount,
+//                "requestCurrency"=> $body->data->requestCurrency,
+//                "requestDate"=> $body->data->requestDate,
+//                "paidAmount"=> $body->data->paidAmount,
+//                "paidCurrency"=> $body->data->paidCurrency,
+//                "exchangeRate"=> $body->data->exchangeRate,
+//                "exchangeDateAsOf"=> $body->data->exchangeDateAsOf,
+//                "exchangeRateFrom"=> $body->data->exchangeRateFrom,
+//                "transactionFee"=> $body->data->transactionFee,
+//                "originalAmount"=> $body->data->originalAmount,
+//                "successDate"=> $body->data->successDate,
+//                "failDate"=> $body->data->failDate,
+//                "failReason"=> $body->data->failReason,
+//                "voidDate"=> $body->data->voidDate,
+//                "voidReason"=> $body->data->voidReason,
+//                "voidByName"=> $body->data->voidByName,
+//                "voidByUserId"=> $body->data->voidByUserId,
+//                "voidByChannel"=> $body->data->voidByChannel,
+//                "backendCallbackUrl"=> $body->data->backendCallbackUrl,
+//                "backendCallbackRequired"=> $body->data->backendCallbackRequired,
+//                "backendCallbackState"=> $body->data->backendCallbackState,
+//                "frontendCallbackUrl"=> $body->data->frontendCallbackUrl,
+//                "paymentExpireDate"=> $body->data->paymentExpireDate,
+//                "paymentMethod"=> $body->data->paymentMethod,
+//                "paymentChannel"=> $body->data->paymentChannel,
+//                "transactionDate"=> $body->data->transactionDate,
+//                "voidPaymentRef"=> $body->data->voidPaymentRef,
+//                "settleState"=> $body->data->settleState,
+//                "settleDate"=> $body->data->settleDate,
+//                "createDate"=> $body->data->createDate,
+//                "createBy"=>$body->data->createBy,
+//                "changeDate"=> $body->data->changeDate,
+//                "changeBy"=> $body->data->changeBy,
+//                "transferHash"=> $body->data->transferHash,
+//                "externalReferenceNo"=> $body->data->externalReferenceNo,
+//                "merchantCode"=> $body->data->merchantCode,
+//                "branchCode"=> $body->data->branchCode,
+//                "receivingType"=> $body->data->receivingType,
+//                "deviceId"=> $body->data->deviceId,
+//                "deviceLoginName"=> $body->data->deviceLoginName,
+//                "transactionType"=> $body->data->transactionType,
+//                "transferBy"=> $body->data->transferBy,
+//                "transferTransactionId"=> $body->data->transferTransactionId,
+//                "transferFromWalletAddress"=> $body->data->transferFromWalletAddress,
+//                "transferToWalletAddress"=> $body->data->transferToWalletAddress,
+//                "transferAssetCode"=> $body->data->transferAssetCode,
+//                "transferNote"=> $body->data->transferNote,
+//                "transferAmount"=> $body->data->transferAmount,
+//                "transferExpireDate"=> $body->data->transferExpireDate,
+            ];
+        }else{
+            $returnResults = [
+                "success" => false
+            ];
+        }
+        return response()->json($returnResults);
+
+    }catch(Exception $e){
+        $returnResults = [
+            "success" => false,
+            "message"=> $e->getMessage()
+        ];
+        return response()->json($returnResults);
+    }
+});
+
 //--------DEV
 
 $app->get('/dev/auth',function (Request $request) use ($app){
