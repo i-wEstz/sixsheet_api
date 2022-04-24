@@ -167,7 +167,7 @@ $app->post('/jqr',function (Request $request) use ($app){
                 "paidAmount"=>$body->paidAmount,
                 "paidCurrency"=>$body->paidCurrency,
                 "exchangeRate"=> (int) $amount / $body->paidAmount ,
-                "expiredAt"=>$body->expiredAt
+//                "expiredAt"=>$body->expiredAt
             ];
         }else{
             $returnResults = [
@@ -212,7 +212,7 @@ $app->post('/jdetail',function (Request $request) use ($app){
             }else if($body->data->state == 20){
                 $desc = "FAILED";
             }else if($body->data->state == 30){
-                $desc = "COMPLETE";
+                $desc = "PAID";
             }
             $returnResults = [
                 "success" => $body->success,
