@@ -40,6 +40,10 @@ $app->post('/callback', function () use ($app){
 |
 */
 $app->get('/jauth',function (Request $request) use ($app){
+
+});
+
+$app->get('/v1/jauth',function (Request $request) use ($app){
     try {
         $url = env('JFIN_LOGIN', true);
         $client_id = env('JFIN_CLIENT', true);
@@ -55,47 +59,6 @@ $app->get('/jauth',function (Request $request) use ($app){
                 "clientId" => $client_id,
                 "merchantId" => $mid,
                 "password" => $pwd
-            ]
-        ]);
-        $code = $response->getStatusCode();
-        if ($code == 200) {
-            $body = json_decode($response->getBody());
-            $token = $body->token->accessToken;
-            $returnResults = [
-                "success" => true,
-                "access_token" => $token,
-            ];
-        } else {
-            $returnResults = [
-                "success" => false
-            ];
-        }
-        return response()->json($returnResults);
-    }catch(Exception $e){
-        $returnResults = [
-            "success" => false,
-            "message"=> $e->getMessage()
-        ];
-        return response()->json($returnResults);
-    }
-});
-
-$app->get('/v1/jauth',function (Request $request) use ($app){
-    try {
-        $url = env('JFIN_LOGIN', true);
-        $role = env('JFIN_ROLE',true);
-        $pwd = env('JFIN_PWD', true);
-        $key = env('JFIN_API', true);
-        $email = env('JFIN_EMAIL',true);
-        $http = new Client();
-        $response = $http->request('POST', $url, [
-            'headers' => [
-                'x-api-key' => $key
-            ],
-            'json' => [
-                "email" => $email,
-                "password" => $pwd,
-                "role" => $role
             ]
         ]);
         $code = $response->getStatusCode();
