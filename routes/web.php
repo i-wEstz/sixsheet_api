@@ -141,7 +141,7 @@ $app->post('/jqr',function (Request $request) use ($app){
                 'Authorization' => 'Bearer '.$access_token
             ],
             'json' => [
-//                "backendCallbackURL"=> "https://sixsheet.me/api/jfin/callback",
+                "backendCallbackURL"=> "https://sixsheet.me/api/jfin/callback",
                 "branchId"=> $branchId,
                 "merchantId"=> $mid,
                 "paidCurrency"=> "JFIN",
@@ -167,7 +167,7 @@ $app->post('/jqr',function (Request $request) use ($app){
                 "paidAmount"=>$body->paidAmount,
                 "paidCurrency"=>$body->paidCurrency,
                 "exchangeRate"=> (int) $amount / $body->paidAmount ,
-//                "expiredAt"=>$body->expiredAt
+                "expiredAt"=>$body->expiredAt
             ];
         }else{
             $returnResults = [
